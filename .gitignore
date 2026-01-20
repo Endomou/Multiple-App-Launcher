@@ -1,0 +1,16 @@
+build/adminLauncher/adminLauncher.pkg
+build/adminLauncher/Analysis-00.toc
+build/adminLauncher/base_library.zip
+build/adminLauncher/EXE-00.toc
+build/adminLauncher/localpycs/pyimod01_archive.pyc
+build/adminLauncher/localpycs/pyimod02_importers.pyc
+build/adminLauncher/localpycs/pyimod03_ctypes.pyc
+build/adminLauncher/localpycs/pyimod04_pywin32.pyc
+build/adminLauncher/localpycs/struct.pyc
+build/adminLauncher/PKG-00.toc
+build/adminLauncher/PYZ-00.pyz
+build/adminLauncher/PYZ-00.toc
+build/adminLauncher/warn-adminLauncher.txt
+build/adminLauncher/xref-adminLauncher.html
+adminLauncher.spec
+dist/launcher_profiles.json

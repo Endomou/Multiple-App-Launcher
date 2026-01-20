@@ -6,10 +6,13 @@ import subprocess
 import os
 import json
 import winreg
+from PIL import Image
+import pystray
+from pystray import MenuItem as item
 
 # --- CONFIGURATION ---
-ctk.set_appearance_mode("Dark")  # Modes: "System" (standard), "Dark", "Light"
-ctk.set_default_color_theme("blue")  # Themes: "blue" (standard), "green", "dark-blue"
+ctk.set_appearance_mode("Dark")
+ctk.set_default_color_theme("blue")
 
 DATA_FILE = "launcher_profiles.json"
 APP_NAME = "MyModernLauncher"
@@ -29,13 +32,15 @@ class App(ctk.CTk):
         # Data Setup
         self.profiles = {}
         self.current_profile_name = ""
-        self.app_frames = [] # To keep track of UI elements in the list
         self.load_data()
+
+        # Handle the "X" button click manually
+        self.protocol('WM_DELETE_WINDOW', self.on_closing)
 
         # --- LEFT SIDEBAR ---
         self.sidebar_frame = ctk.CTkFrame(self, width=200, corner_radius=0)
         self.sidebar_frame.grid(row=0, column=0, sticky="nsew")
-        self.sidebar_frame.grid_rowconfigure(4, weight=1)
+        self.sidebar_frame.grid_rowconfigure(6, weight=1)
 
         # Sidebar Title
         self.logo_label = ctk.CTkLabel(self.sidebar_frame, text="LAUNCHER PRO", font=ctk.CTkFont(size=20, weight="bold"))
@@ -53,11 +58,20 @@ class App(ctk.CTk):
                                              fg_color="transparent", border_width=2, text_color=("gray10", "#DCE4EE"))
         self.btn_new_profile.grid(row=3, column=0, padx=20, pady=10)
 
-        # Startup Switch (Bottom of Sidebar)
+        # --- SETTINGS SWITCHES (Bottom of Sidebar) ---
+        
+        # 1. Startup Switch
         self.startup_switch_var = ctk.BooleanVar()
         self.startup_switch = ctk.CTkSwitch(self.sidebar_frame, text="Run at Startup", 
                                             command=self.toggle_startup, variable=self.startup_switch_var, onvalue=True, offvalue=False)
-        self.startup_switch.grid(row=5, column=0, padx=20, pady=20, sticky="s")
+        self.startup_switch.grid(row=7, column=0, padx=20, pady=(10, 0), sticky="s")
+
+        # 2. Minimize to Tray Switch
+        self.tray_switch_var = ctk.BooleanVar(value=True) # Default to True
+        self.tray_switch = ctk.CTkSwitch(self.sidebar_frame, text="Close to Tray", 
+                                         variable=self.tray_switch_var, onvalue=True, offvalue=False)
+        self.tray_switch.grid(row=8, column=0, padx=20, pady=20, sticky="s")
+
 
         # --- MAIN CONTENT AREA ---
         self.main_frame = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
@@ -95,7 +109,43 @@ class App(ctk.CTk):
         self.check_startup_status()
         self.refresh_profile_ui()
 
-    # --- LOGIC SECTIONS ---
+    # --- TRAY ICON LOGIC ---
+
+    def on_closing(self):
+        """Overrides the X button behavior"""
+        if self.tray_switch_var.get():
+            self.withdraw()  # Hide the window
+            self.show_tray_icon()
+        else:
+            self.quit() # Actually close the app
+
+    def show_tray_icon(self):
+        """Creates and runs the system tray icon"""
+        # Create a simple icon image using PIL (Black square with 'A' or similar)
+        # In a real app, you would use: image = Image.open("icon.ico")
+        image = Image.new('RGB', (64, 64), color=(44, 201, 133)) # Green square
+
+        # Define Menu Actions
+        menu = (item('Show', self.show_window), item('Quit', self.quit_app))
+        
+        # Create Icon
+        self.tray_icon = pystray.Icon("name", image, "Launcher Pro", menu)
+        
+        # Run it (This blocks the main thread until icon.stop is called)
+        self.tray_icon.run()
+
+    def show_window(self, icon, item):
+        """Callback to restore window"""
+        self.tray_icon.stop()  # Stop the tray loop
+        self.after(0, self.deiconify)  # Restore window on main thread
+
+    def quit_app(self, icon, item):
+        """Callback to fully quit"""
+        self.tray_icon.stop()
+        self.quit()
+        sys.exit()
+
+    # --- DATA & UI LOGIC (Existing Code) ---
 
     def load_data(self):
         if os.path.exists(DATA_FILE):
@@ -115,28 +165,22 @@ class App(ctk.CTk):
             json.dump(self.profiles, f, indent=4)
 
     def refresh_profile_ui(self):
-        # Update Dropdown
         profiles = list(self.profiles.keys())
         self.profile_menu.configure(values=profiles)
         self.profile_menu.set(self.current_profile_name)
         
-        # Clear Scroll Frame
         for widget in self.scroll_frame.winfo_children():
             widget.destroy()
 
-        # Populate Scroll Frame with Modern "Cards"
         apps = self.profiles[self.current_profile_name]
         
         for index, app_path in enumerate(apps):
-            # Each app is a row
             row_frame = ctk.CTkFrame(self.scroll_frame)
             row_frame.pack(fill="x", pady=5)
             
-            # App Name/Path Label
             lbl = ctk.CTkLabel(row_frame, text=app_path, anchor="w", padx=10)
             lbl.pack(side="left", fill="x", expand=True, pady=10)
             
-            # Delete Button (Small 'x')
             btn_del = ctk.CTkButton(row_frame, text="✕", width=40, fg_color="#444", hover_color="#666",
                                     command=lambda x=app_path: self.remove_app(x))
             btn_del.pack(side="right", padx=10)
@@ -192,15 +236,12 @@ class App(ctk.CTk):
                 count += 1
             except Exception as e:
                 print(f"Error: {e}")
-        
-        # Optional: Minimize after launch
         self.iconify()
 
     # --- STARTUP LOGIC ---
     def toggle_startup(self):
         is_on = self.startup_switch_var.get()
         key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
-        
         if getattr(sys, 'frozen', False):
             app_path = sys.executable 
         else:
