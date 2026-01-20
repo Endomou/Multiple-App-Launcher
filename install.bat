@@ -1,0 +1,1 @@
+pyinstaller --noconsole --onefile --collect-all customtkinter AdminLauncher.py
