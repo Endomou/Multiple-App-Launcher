@@ -1,5 +1,5 @@
 import customtkinter as ctk
-from tkinter import filedialog, messagebox, simpledialog
+from tkinter import filedialog, messagebox, simpledialog, Menu
 import ctypes
 import sys
 import subprocess
@@ -40,7 +40,7 @@ class App(ctk.CTk):
         # --- LEFT SIDEBAR ---
         self.sidebar_frame = ctk.CTkFrame(self, width=200, corner_radius=0)
         self.sidebar_frame.grid(row=0, column=0, sticky="nsew")
-        self.sidebar_frame.grid_rowconfigure(6, weight=1)
+        self.sidebar_frame.grid_rowconfigure(5, weight=1) # Allow row 5 (Quick Launch) to expand
 
         # Sidebar Title
         self.logo_label = ctk.CTkLabel(self.sidebar_frame, text="LAUNCHER PRO", font=ctk.CTkFont(size=20, weight="bold"))
@@ -57,6 +57,13 @@ class App(ctk.CTk):
         self.btn_new_profile = ctk.CTkButton(self.sidebar_frame, text="+ New Profile", command=self.create_profile, 
                                              fg_color="transparent", border_width=2, text_color=("gray10", "#DCE4EE"))
         self.btn_new_profile.grid(row=3, column=0, padx=20, pady=10)
+
+        # Quick Launch Section
+        self.lbl_quick = ctk.CTkLabel(self.sidebar_frame, text="Quick Launch:", anchor="w", font=ctk.CTkFont(size=14, weight="bold"))
+        self.lbl_quick.grid(row=4, column=0, padx=20, pady=(10, 0), sticky="w")
+
+        self.quick_launch_frame = ctk.CTkScrollableFrame(self.sidebar_frame, fg_color="transparent")
+        self.quick_launch_frame.grid(row=5, column=0, padx=10, pady=5, sticky="nsew")
 
         # --- SETTINGS SWITCHES (Bottom of Sidebar) ---
         
@@ -169,6 +176,8 @@ class App(ctk.CTk):
         self.profile_menu.configure(values=profiles)
         self.profile_menu.set(self.current_profile_name)
         
+        self.refresh_quick_launch_list()
+        
         for widget in self.scroll_frame.winfo_children():
             widget.destroy()
 
@@ -183,16 +192,32 @@ class App(ctk.CTk):
             lbl = ctk.CTkLabel(row_frame, text=app_path, anchor="w", padx=10)
             lbl.pack(side="left", fill="x", expand=True, pady=10)
 
+            # Context Menu
+            menu = Menu(self, tearoff=0)
+            menu.add_command(label="Launch", command=lambda p=app_path: self.launch_single_app(p))
+            menu.add_command(label="Edit", command=lambda x=index: self.edit_app(x))
+            menu.add_command(label="Delete", command=lambda x=app_path: self.remove_app(x))
+
+            def show_menu(event, m=menu):
+                 m.tk_popup(event.x_root, event.y_root)
+
             # Click Events
             lbl.bind("<Button-1>", lambda event, f=row_frame: self.select_app_row(f))
             lbl.bind("<Double-Button-1>", lambda event, p=app_path: self.launch_single_app(p))
+            lbl.bind("<Button-3>", show_menu) 
+
             row_frame.bind("<Button-1>", lambda event, f=row_frame: self.select_app_row(f))
             row_frame.bind("<Double-Button-1>", lambda event, p=app_path: self.launch_single_app(p))
+            row_frame.bind("<Button-3>", show_menu) 
             
             # Buttons
-            btn_del = ctk.CTkButton(row_frame, text="✕", width=40, fg_color="#444", hover_color="#666",
+            btn_del = ctk.CTkButton(row_frame, text="✕", width=40, fg_color="#ef5350", hover_color="#c62828",
                                     command=lambda x=app_path: self.remove_app(x))
             btn_del.pack(side="right", padx=(5, 10))
+
+            btn_edit = ctk.CTkButton(row_frame, text="✎", width=40, fg_color="#444", hover_color="#666",
+                                    command=lambda x=index: self.edit_app(x))
+            btn_edit.pack(side="right", padx=(5, 0))
 
             btn_run = ctk.CTkButton(row_frame, text="▶", width=40, fg_color="#2CC985", hover_color="#0C955A",
                                     command=lambda p=app_path: self.launch_single_app(p))
@@ -237,6 +262,14 @@ class App(ctk.CTk):
             self.save_data()
             self.refresh_profile_ui()
 
+    def edit_app(self, index):
+        old_path = self.profiles[self.current_profile_name][index]
+        new_path = filedialog.askopenfilename(filetypes=[("Executables", "*.exe")], initialfile=old_path)
+        if new_path:
+            self.profiles[self.current_profile_name][index] = new_path
+            self.save_data()
+            self.refresh_profile_ui()
+
     def add_app(self):
         path = filedialog.askopenfilename(filetypes=[("Executables", "*.exe")])
         if path:
@@ -251,9 +284,12 @@ class App(ctk.CTk):
         self.refresh_profile_ui()
 
     def launch_profile(self):
-        apps = self.profiles[self.current_profile_name]
+        self.launch_specific_profile(self.current_profile_name)
+
+    def launch_specific_profile(self, profile_name):
+        apps = self.profiles.get(profile_name, [])
         if not apps:
-            messagebox.showinfo("Empty", "No apps to launch!")
+            messagebox.showinfo("Empty", f"No apps in {profile_name}!")
             return
         
         count = 0
@@ -264,6 +300,16 @@ class App(ctk.CTk):
             except Exception as e:
                 print(f"Error: {e}")
         self.iconify()
+
+    def refresh_quick_launch_list(self):
+        for widget in self.quick_launch_frame.winfo_children():
+            widget.destroy()
+        
+        for profile in self.profiles.keys():
+            btn = ctk.CTkButton(self.quick_launch_frame, text=profile, 
+                                command=lambda p=profile: self.launch_specific_profile(p),
+                                fg_color="transparent", border_width=1, text_color=("gray10", "#DCE4EE"))
+            btn.pack(fill="x", pady=2)
 
     # --- STARTUP LOGIC ---
     def toggle_startup(self):
