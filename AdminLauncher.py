@@ -276,14 +276,25 @@ class App(ctk.CTk):
                                         command=lambda p=app_path: self.launch_single_app(p))
                 btn_run.pack(side="right", padx=(5, 0))
 
-                # Icon & Label (Packed LAST to take remaining space)
+                # --- Content Layout ---
                 icon_img = self.get_exe_icon(app_path)
                 if icon_img:
                     self.icon_images.append(icon_img)
 
-                lbl = ctk.CTkLabel(row_frame, text=app_path, anchor="w", padx=10,
-                                   image=icon_img, compound="left")
-                lbl.pack(side="left", fill="x", expand=True, pady=10)
+                # 1. Icon Label
+                lbl_icon = ctk.CTkLabel(row_frame, text="", image=icon_img, width=40)
+                lbl_icon.pack(side="left", padx=(10, 5))
+
+                # 2. Information Frame (Name + Path)
+                info_frame = ctk.CTkFrame(row_frame, fg_color="transparent")
+                info_frame.pack(side="left", fill="both", expand=True, pady=5)
+
+                app_name = os.path.basename(app_path)
+                lbl_name = ctk.CTkLabel(info_frame, text=app_name, anchor="w", font=ctk.CTkFont(size=14, weight="bold"))
+                lbl_name.pack(side="top", fill="x")
+
+                lbl_path = ctk.CTkLabel(info_frame, text=app_path, anchor="w", font=ctk.CTkFont(size=12), text_color="gray70")
+                lbl_path.pack(side="top", fill="x")
 
                 # Context Menu
                 menu = Menu(self, tearoff=0)
@@ -294,14 +305,11 @@ class App(ctk.CTk):
                 def show_menu(event, m=menu):
                      m.tk_popup(event.x_root, event.y_root)
 
-                # Click Events
-                lbl.bind("<Button-1>", lambda event, f=row_frame: self.select_app_row(f))
-                lbl.bind("<Double-Button-1>", lambda event, p=app_path: self.launch_single_app(p))
-                lbl.bind("<Button-3>", show_menu) 
-
-                row_frame.bind("<Button-1>", lambda event, f=row_frame: self.select_app_row(f))
-                row_frame.bind("<Double-Button-1>", lambda event, p=app_path: self.launch_single_app(p))
-                row_frame.bind("<Button-3>", show_menu)
+                # Bind Events to ALL structural elements so clicking anywhere works
+                for w in [row_frame, lbl_icon, info_frame, lbl_name, lbl_path]:
+                    w.bind("<Button-1>", lambda event, f=row_frame: self.select_app_row(f))
+                    w.bind("<Double-Button-1>", lambda event, p=app_path: self.launch_single_app(p))
+                    w.bind("<Button-3>", show_menu)
 
         else: # GRID Mode
              # Grid Configuration (e.g., 5 columns)
