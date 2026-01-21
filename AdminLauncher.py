@@ -173,17 +173,44 @@ class App(ctk.CTk):
             widget.destroy()
 
         apps = self.profiles[self.current_profile_name]
+        self.app_rows = []
         
         for index, app_path in enumerate(apps):
             row_frame = ctk.CTkFrame(self.scroll_frame)
             row_frame.pack(fill="x", pady=5)
+            self.app_rows.append(row_frame)
             
             lbl = ctk.CTkLabel(row_frame, text=app_path, anchor="w", padx=10)
             lbl.pack(side="left", fill="x", expand=True, pady=10)
+
+            # Click Events
+            lbl.bind("<Button-1>", lambda event, f=row_frame: self.select_app_row(f))
+            lbl.bind("<Double-Button-1>", lambda event, p=app_path: self.launch_single_app(p))
+            row_frame.bind("<Button-1>", lambda event, f=row_frame: self.select_app_row(f))
+            row_frame.bind("<Double-Button-1>", lambda event, p=app_path: self.launch_single_app(p))
             
+            # Buttons
             btn_del = ctk.CTkButton(row_frame, text="✕", width=40, fg_color="#444", hover_color="#666",
                                     command=lambda x=app_path: self.remove_app(x))
-            btn_del.pack(side="right", padx=10)
+            btn_del.pack(side="right", padx=(5, 10))
+
+            btn_run = ctk.CTkButton(row_frame, text="▶", width=40, fg_color="#2CC985", hover_color="#0C955A",
+                                    command=lambda p=app_path: self.launch_single_app(p))
+            btn_run.pack(side="right", padx=(5, 0))
+
+    def select_app_row(self, selected_frame):
+        for frame in self.app_rows:
+            if frame == selected_frame:
+                frame.configure(fg_color=("gray75", "gray25"))
+            else:
+                frame.configure(fg_color=("gray86", "gray17"))
+
+    def launch_single_app(self, app_path):
+        try:
+            subprocess.Popen(app_path)
+        except Exception as e:
+            print(f"Error launching {app_path}: {e}")
+
 
     def change_profile(self, choice):
         self.current_profile_name = choice
