@@ -96,6 +96,9 @@ class App(ctk.CTk):
         self.btn_delete_profile = ctk.CTkButton(self.header_frame, text="Delete Profile", fg_color="#ef5350", hover_color="#c62828", width=100, command=self.delete_profile)
         self.btn_delete_profile.pack(side="right")
 
+        self.btn_rename_profile = ctk.CTkButton(self.header_frame, text="Rename Profile", fg_color="#FFA726", hover_color="#FB8C00", width=100, command=self.rename_profile)
+        self.btn_rename_profile.pack(side="right", padx=(0, 10))
+
         # Scrollable App List
         self.scroll_frame = ctk.CTkScrollableFrame(self.main_frame, label_text="Applications List")
         self.scroll_frame.grid(row=1, column=0, sticky="nsew")
@@ -249,6 +252,17 @@ class App(ctk.CTk):
             else:
                 self.profiles[name] = []
                 self.current_profile_name = name
+                self.save_data()
+                self.refresh_profile_ui()
+
+    def rename_profile(self):
+        new_name = simpledialog.askstring("Rename Profile", f"Rename '{self.current_profile_name}' to:", initialvalue=self.current_profile_name)
+        if new_name and new_name != self.current_profile_name:
+            if new_name in self.profiles:
+                messagebox.showwarning("Error", "Profile name already exists.")
+            else:
+                self.profiles[new_name] = self.profiles.pop(self.current_profile_name)
+                self.current_profile_name = new_name
                 self.save_data()
                 self.refresh_profile_ui()
 
