@@ -1,6 +1,7 @@
 import customtkinter as ctk
 from tkinter import filedialog, messagebox, simpledialog, Menu
 import ctypes
+from ctypes import wintypes
 import sys
 import subprocess
 import os
@@ -13,6 +14,7 @@ import win32gui
 import win32ui
 import win32con
 import win32api
+import pythoncom
 from win32com.shell import shell, shellcon
 
 # --- CONFIGURATION ---
@@ -340,40 +342,23 @@ class App(ctk.CTk):
         if not path or not os.path.exists(path):
             return None
         
-        path = os.path.normpath(path) # Ensure path format is correct for Windows APIs
+        path = os.path.normpath(path)
         
-        # Try to get High Resolution Icon (Jumbo 256x256) if size is large
+        # Method 1: PrivateExtractIconsW (ctypes) - Most reliable for specific sizes
         if size == "large":
             try:
-                # Get the index in the system image list
-                # SHGFI_SYSICONINDEX = 0x000004000
-                ret, info = shell.SHGetFileInfo(path, 0, shellcon.SHGFI_SYSICONINDEX)
-                idx = info[1]
-                
-                # Try Jumbo (4) -> 256x256 or ExtraLarge (2) -> 48x48
-                # We start with Jumbo
-                hIcon = None
-                icon_size = 0
-                
-                try:
-                    # SHIL_JUMBO = 4
-                    jumbo_list = shell.SHGetImageList(4, shell.IID_IImageList)
-                    hIcon = jumbo_list.GetIcon(idx, shellcon.ILD_TRANSPARENT)
-                    icon_size = 256
-                except:
-                    # Fallback to SHIL_EXTRALARGE = 2
-                    try:
-                        xl_list = shell.SHGetImageList(2, shell.IID_IImageList)
-                        hIcon = xl_list.GetIcon(idx, shellcon.ILD_TRANSPARENT)
-                        icon_size = 48
-                    except:
-                        pass
-                
-                if hIcon and icon_size > 0:
-                    return self.hicon_to_image(hIcon, icon_size, (70, 70))
-                    
+                # Try 256x256
+                hIcon_256 = self.fetch_icon_ctypes(path, 256)
+                if hIcon_256:
+                    img = self.hicon_to_image(hIcon_256, 256, (70, 70))
+                    if img: return img
+
+                # Try 48x48
+                hIcon_48 = self.fetch_icon_ctypes(path, 48)
+                if hIcon_48:
+                    return self.hicon_to_image(hIcon_48, 48, (70, 70))
             except Exception as e:
-                print(f"Icon Fetch Error: {e}") # Debugging
+                print(f"Ctypes Icon Fetch Error: {e}")
 
         # Fallback / Normal method using ExtractIconEx (Standard 32x32)
         try:
@@ -385,7 +370,7 @@ class App(ctk.CTk):
                  out_size = (70, 70)
             else:
                  hIcon = small[0] if small else (large[0] if large else None)
-                 req_size = 16 # Small is usually 16x16
+                 req_size = 16 
                  out_size = (20, 20)
             
             if not hIcon:
@@ -395,6 +380,17 @@ class App(ctk.CTk):
             
         except Exception:
             return None
+
+    def fetch_icon_ctypes(self, path, size):
+        try:
+            phicon = (wintypes.HICON * 1)()
+            # PrivateExtractIconsW(file, index, width, height, phicon, piconid, nIcons, flags)
+            res = ctypes.windll.user32.PrivateExtractIconsW(path, 0, size, size, phicon, None, 1, 0)
+            if res > 0:
+                return phicon[0]
+        except:
+            pass
+        return None
 
     def hicon_to_image(self, hIcon, icon_size, display_size):
         try:
