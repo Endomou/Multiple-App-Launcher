@@ -22,7 +22,7 @@ class App(ctk.CTk):
         super().__init__()
 
         # Window Setup
-        self.title("Admin Command Center")
+        self.title("Multiple App Launcher - Admin")
         self.geometry("900x600")
 
         # Grid Layout (1x2)
@@ -245,7 +245,14 @@ class App(ctk.CTk):
         if getattr(sys, 'frozen', False):
             app_path = sys.executable 
         else:
-            app_path = f'"{sys.executable}" "{os.path.abspath(sys.argv[0])}"'
+            # Use pythonw.exe if available to avoid console window on startup
+            exe = sys.executable
+            if exe.lower().endswith("python.exe"):
+                dir_name = os.path.dirname(exe)
+                pythonw_path = os.path.join(dir_name, "pythonw.exe")
+                if os.path.exists(pythonw_path):
+                    exe = pythonw_path
+            app_path = f'"{exe}" "{os.path.abspath(sys.argv[0])}"'
 
         try:
             key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_ALL_ACCESS)

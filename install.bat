@@ -1,1 +1,1 @@
-pyinstaller --noconsole --onefile --collect-all customtkinter AdminLauncher.py
+conda activate pytorch-ultra && pyinstaller --noconsole --onefile --collect-all customtkinter AdminLauncher.py

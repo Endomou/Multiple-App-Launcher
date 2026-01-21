@@ -14,3 +14,4 @@ build/adminLauncher/warn-adminLauncher.txt
 build/adminLauncher/xref-adminLauncher.html
 adminLauncher.spec
 dist/launcher_profiles.json
+/dist
