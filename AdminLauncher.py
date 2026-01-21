@@ -9,6 +9,14 @@ import winreg
 from PIL import Image
 import pystray
 from pystray import MenuItem as item
+import win32gui
+import win32ui
+import win32con
+import win32api
+import win32gui
+import win32ui
+import win32con
+import win32api
 
 # --- CONFIGURATION ---
 ctk.set_appearance_mode("Dark")
@@ -17,9 +25,57 @@ ctk.set_default_color_theme("blue")
 DATA_FILE = "launcher_profiles.json"
 APP_NAME = "MyModernLauncher"
 
+class ToolTip(object):
+    def __init__(self, widget, text):
+        self.widget = widget
+        self.text = text
+        self.tipwindow = None
+        self.id = None
+        self.x = self.y = 0
+        self.widget.bind("<Enter>", self.enter)
+        self.widget.bind("<Leave>", self.leave)
+
+    def enter(self, event=None):
+        self.schedule()
+
+    def leave(self, event=None):
+        self.unschedule()
+        self.hidetip()
+
+    def schedule(self):
+        self.unschedule()
+        self.id = self.widget.after(500, self.showtip)
+
+    def unschedule(self):
+        id = self.id
+        self.id = None
+        if id:
+            self.widget.after_cancel(id)
+
+    def showtip(self, event=None):
+        x = y = 0
+        x, y, cx, cy = self.widget.bbox("insert")
+        x += self.widget.winfo_rootx() + 25
+        y += self.widget.winfo_rooty() + 20
+        self.tipwindow = tw = ctk.CTkToplevel(self.widget)
+        tw.wm_overrideredirect(True)
+        tw.wm_geometry(f"+{x}+{y}")
+        
+        label = ctk.CTkLabel(tw, text=self.text, corner_radius=6, fg_color="#333333", text_color="#fff", padx=10, pady=5)
+        label.pack()
+
+    def hidetip(self):
+        tw = self.tipwindow
+        self.tipwindow = None
+        if tw:
+            tw.destroy()
+
 class App(ctk.CTk):
     def __init__(self):
         super().__init__()
+
+        # State
+        self.view_mode = "List" # "List" or "Grid"
 
         # Window Setup
         self.title("Multiple App Launcher - Admin")
@@ -98,6 +154,11 @@ class App(ctk.CTk):
 
         self.btn_rename_profile = ctk.CTkButton(self.header_frame, text="Rename Profile", fg_color="#FFA726", hover_color="#FB8C00", width=100, command=self.rename_profile)
         self.btn_rename_profile.pack(side="right", padx=(0, 10))
+
+        # View Mode Toggle
+        self.view_mode_seg = ctk.CTkSegmentedButton(self.header_frame, values=["List", "Grid"], command=self.set_view_mode)
+        self.view_mode_seg.set("List")
+        self.view_mode_seg.pack(side="right", padx=(0, 20))
 
         # Scrollable App List
         self.scroll_frame = ctk.CTkScrollableFrame(self.main_frame, label_text="Applications List")
@@ -186,13 +247,33 @@ class App(ctk.CTk):
 
         apps = self.profiles[self.current_profile_name]
         self.app_rows = []
-        
+        self.icon_images = [] # Prevent GC
+
         for index, app_path in enumerate(apps):
             row_frame = ctk.CTkFrame(self.scroll_frame)
             row_frame.pack(fill="x", pady=5)
             self.app_rows.append(row_frame)
             
-            lbl = ctk.CTkLabel(row_frame, text=app_path, anchor="w", padx=10)
+            # Buttons (Packed FIRST to reserve space)
+            btn_del = ctk.CTkButton(row_frame, text="✕", width=40, fg_color="#ef5350", hover_color="#c62828",
+                                    command=lambda x=app_path: self.remove_app(x))
+            btn_del.pack(side="right", padx=(5, 10))
+
+            btn_edit = ctk.CTkButton(row_frame, text="✎", width=40, fg_color="#444", hover_color="#666",
+                                    command=lambda x=index: self.edit_app(x))
+            btn_edit.pack(side="right", padx=(5, 0))
+
+            btn_run = ctk.CTkButton(row_frame, text="▶", width=40, fg_color="#2CC985", hover_color="#0C955A",
+                                    command=lambda p=app_path: self.launch_single_app(p))
+            btn_run.pack(side="right", padx=(5, 0))
+
+            # Icon & Label (Packed LAST to take remaining space)
+            icon_img = self.get_exe_icon(app_path)
+            if icon_img:
+                self.icon_images.append(icon_img)
+
+            lbl = ctk.CTkLabel(row_frame, text=app_path, anchor="w", padx=10,
+                               image=icon_img, compound="left")
             lbl.pack(side="left", fill="x", expand=True, pady=10)
 
             # Context Menu
@@ -213,18 +294,45 @@ class App(ctk.CTk):
             row_frame.bind("<Double-Button-1>", lambda event, p=app_path: self.launch_single_app(p))
             row_frame.bind("<Button-3>", show_menu) 
             
-            # Buttons
-            btn_del = ctk.CTkButton(row_frame, text="✕", width=40, fg_color="#ef5350", hover_color="#c62828",
-                                    command=lambda x=app_path: self.remove_app(x))
-            btn_del.pack(side="right", padx=(5, 10))
-
-            btn_edit = ctk.CTkButton(row_frame, text="✎", width=40, fg_color="#444", hover_color="#666",
-                                    command=lambda x=index: self.edit_app(x))
-            btn_edit.pack(side="right", padx=(5, 0))
-
-            btn_run = ctk.CTkButton(row_frame, text="▶", width=40, fg_color="#2CC985", hover_color="#0C955A",
-                                    command=lambda p=app_path: self.launch_single_app(p))
-            btn_run.pack(side="right", padx=(5, 0))
+    def get_exe_icon(self, path):
+        if not path or not os.path.exists(path):
+            return None
+        try:
+            # Extract Icon
+            large, small = win32gui.ExtractIconEx(path, 0)
+            hIcon = small[0] if small else (large[0] if large else None)
+            
+            if not hIcon:
+                return None
+            
+            # Create dc
+            hdc = win32ui.CreateDCFromHandle(win32gui.GetDC(0))
+            hbmp = win32ui.CreateBitmap()
+            hbmp.CreateCompatibleBitmap(hdc, 32, 32)
+            hdc = hdc.CreateCompatibleDC()
+            
+            hdc.SelectObject(hbmp)
+            
+            # Draw
+            win32gui.DrawIconEx(hdc.GetSafeHdc(), 0, 0, hIcon, 32, 32, 0, 0, win32con.DI_NORMAL)
+            
+            # Convert
+            bmpinfo = hbmp.GetInfo()
+            bmpstr = hbmp.GetBitmapBits(True)
+            
+            img = Image.frombuffer(
+                'RGBA',
+                (bmpinfo['bmWidth'], bmpinfo['bmHeight']),
+                bmpstr, 'raw', 'BGRA', 0, 1
+            )
+            
+            # Clean
+            win32gui.DestroyIcon(hIcon)
+            
+            return ctk.CTkImage(light_image=img, dark_image=img, size=(20, 20))
+            
+        except Exception:
+            return None
 
     def select_app_row(self, selected_frame):
         for frame in self.app_rows:
