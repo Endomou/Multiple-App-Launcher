@@ -262,7 +262,8 @@ class App(ctk.CTk):
                 row_frame = ctk.CTkFrame(self.scroll_frame)
                 row_frame.pack(fill="x", pady=5)
                 self.app_rows.append(row_frame)
-                
+                row_frame.is_selected = False
+
                 # Buttons (Packed FIRST to reserve space)
                 btn_del = ctk.CTkButton(row_frame, text="✕", width=40, fg_color="#ef5350", hover_color="#c62828",
                                         command=lambda x=app_path: self.remove_app(x))
@@ -305,11 +306,37 @@ class App(ctk.CTk):
                 def show_menu(event, m=menu):
                      m.tk_popup(event.x_root, event.y_root)
 
+                # Hover Logic
+                default_fg = ("gray86", "gray17")
+                hover_fg = ("gray82", "gray21")
+
+                def on_enter(e, f=row_frame):
+                    if not getattr(f, 'is_selected', False):
+                        f.configure(fg_color=hover_fg)
+
+                def on_leave(e, f=row_frame):
+                    try:
+                        x, y = self.winfo_pointerxy()
+                        widget = self.winfo_containing(x, y)
+                        if widget:
+                            curr = widget
+                            while curr is not None:
+                                if curr == f:
+                                    return
+                                curr = curr.master
+                    except:
+                        pass
+                    
+                    if not getattr(f, 'is_selected', False):
+                        f.configure(fg_color=default_fg)
+
                 # Bind Events to ALL structural elements so clicking anywhere works
                 for w in [row_frame, lbl_icon, info_frame, lbl_name, lbl_path]:
                     w.bind("<Button-1>", lambda event, f=row_frame: self.select_app_row(f))
                     w.bind("<Double-Button-1>", lambda event, p=app_path: self.launch_single_app(p))
                     w.bind("<Button-3>", show_menu)
+                    w.bind("<Enter>", on_enter)
+                    w.bind("<Leave>", on_leave)
 
         else: # GRID Mode
              # Grid Configuration (e.g., 5 columns)
@@ -433,8 +460,10 @@ class App(ctk.CTk):
         for frame in self.app_rows:
             if frame == selected_frame:
                 frame.configure(fg_color=("gray75", "gray25"))
+                frame.is_selected = True
             else:
                 frame.configure(fg_color=("gray86", "gray17"))
+                frame.is_selected = False
 
     def launch_single_app(self, app_path):
         try:
