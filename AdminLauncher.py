@@ -13,10 +13,7 @@ import win32gui
 import win32ui
 import win32con
 import win32api
-import win32gui
-import win32ui
-import win32con
-import win32api
+from win32com.shell import shell, shellcon
 
 # --- CONFIGURATION ---
 ctk.set_appearance_mode("Dark")
@@ -342,28 +339,75 @@ class App(ctk.CTk):
     def get_exe_icon(self, path, size="small"):
         if not path or not os.path.exists(path):
             return None
+        
+        path = os.path.normpath(path) # Ensure path format is correct for Windows APIs
+        
+        # Try to get High Resolution Icon (Jumbo 256x256) if size is large
+        if size == "large":
+            try:
+                # Get the index in the system image list
+                # SHGFI_SYSICONINDEX = 0x000004000
+                ret, info = shell.SHGetFileInfo(path, 0, shellcon.SHGFI_SYSICONINDEX)
+                idx = info[1]
+                
+                # Try Jumbo (4) -> 256x256 or ExtraLarge (2) -> 48x48
+                # We start with Jumbo
+                hIcon = None
+                icon_size = 0
+                
+                try:
+                    # SHIL_JUMBO = 4
+                    jumbo_list = shell.SHGetImageList(4, shell.IID_IImageList)
+                    hIcon = jumbo_list.GetIcon(idx, shellcon.ILD_TRANSPARENT)
+                    icon_size = 256
+                except:
+                    # Fallback to SHIL_EXTRALARGE = 2
+                    try:
+                        xl_list = shell.SHGetImageList(2, shell.IID_IImageList)
+                        hIcon = xl_list.GetIcon(idx, shellcon.ILD_TRANSPARENT)
+                        icon_size = 48
+                    except:
+                        pass
+                
+                if hIcon and icon_size > 0:
+                    return self.hicon_to_image(hIcon, icon_size, (70, 70))
+                    
+            except Exception as e:
+                print(f"Icon Fetch Error: {e}") # Debugging
+
+        # Fallback / Normal method using ExtractIconEx (Standard 32x32)
         try:
-            # Extract Icon
             large, small = win32gui.ExtractIconEx(path, 0)
             
             if size == "large":
                  hIcon = large[0] if large else (small[0] if small else None)
+                 req_size = 32
+                 out_size = (70, 70)
             else:
                  hIcon = small[0] if small else (large[0] if large else None)
+                 req_size = 16 # Small is usually 16x16
+                 out_size = (20, 20)
             
             if not hIcon:
                 return None
             
+            return self.hicon_to_image(hIcon, req_size, out_size)
+            
+        except Exception:
+            return None
+
+    def hicon_to_image(self, hIcon, icon_size, display_size):
+        try:
             # Create dc
             hdc = win32ui.CreateDCFromHandle(win32gui.GetDC(0))
             hbmp = win32ui.CreateBitmap()
-            hbmp.CreateCompatibleBitmap(hdc, 32, 32)
+            hbmp.CreateCompatibleBitmap(hdc, icon_size, icon_size)
             hdc = hdc.CreateCompatibleDC()
             
             hdc.SelectObject(hbmp)
             
             # Draw
-            win32gui.DrawIconEx(hdc.GetSafeHdc(), 0, 0, hIcon, 32, 32, 0, 0, win32con.DI_NORMAL)
+            win32gui.DrawIconEx(hdc.GetSafeHdc(), 0, 0, hIcon, icon_size, icon_size, 0, 0, win32con.DI_NORMAL)
             
             # Convert
             bmpinfo = hbmp.GetInfo()
@@ -375,38 +419,11 @@ class App(ctk.CTk):
                 bmpstr, 'raw', 'BGRA', 0, 1
             )
             
-            # Clean
+            # Clean up
             win32gui.DestroyIcon(hIcon)
-            
-            # Scale if necessary (ExtractIconEx usually returns 32x32 for large)
-            if size == "large":
-                 return ctk.CTkImage(light_image=img, dark_image=img, size=(48, 48))
-            else:
-                 return ctk.CTkImage(light_image=img, dark_image=img, size=(20, 20))
-            
-        except Exception:
-            return None
-            
-            # Draw
-            win32gui.DrawIconEx(hdc.GetSafeHdc(), 0, 0, hIcon, 32, 32, 0, 0, win32con.DI_NORMAL)
-            
-            # Convert
-            bmpinfo = hbmp.GetInfo()
-            bmpstr = hbmp.GetBitmapBits(True)
-            
-            img = Image.frombuffer(
-                'RGBA',
-                (bmpinfo['bmWidth'], bmpinfo['bmHeight']),
-                bmpstr, 'raw', 'BGRA', 0, 1
-            )
-            
-            # Clean
-            win32gui.DestroyIcon(hIcon)
-            
-            return ctk.CTkImage(light_image=img, dark_image=img, size=(20, 20))
-            
-        except Exception:
-            return None
+            return ctk.CTkImage(light_image=img, dark_image=img, size=display_size)
+        except:
+             return None
 
     def select_app_row(self, selected_frame):
         for frame in self.app_rows:
