@@ -53,16 +53,6 @@ Run at Startup: Toggles a registry key to start the app when you log in.
 
 Close to Tray: If enabled, clicking the X button minimizes the app to the system tray (near the clock) instead of closing it.
 
-🏗️ Compiling to .EXE
-To distribute this as a standalone application without requiring Python installed on the target machine:
-
-
-
-Bash
-
-pyinstaller --noconsole --onefile --collect-all customtkinter --collect-all pystray --collect-all PIL ModernLauncher.py
-Locate the File: The compiled ModernLauncher.exe will be found in the dist/ folder.
-
 ⚠️ Troubleshooting
 Antivirus Warnings: Windows Defender may flag the compiled .exe because it requests Admin rights and is unsigned. This is a known "False Positive" for PyInstaller apps. You can add an exclusion to resolve this.
 
