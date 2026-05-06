@@ -195,8 +195,8 @@ class App(ctk.CTk):
         # In a real app, you would use: image = Image.open("icon.ico")
         image = Image.new('RGB', (64, 64), color=(44, 201, 133)) # Green square
 
-        # Define Menu Actions
-        menu = (item('Show', self.show_window), item('Quit', self.quit_app))
+        # Define Menu Actions (default=True makes 'Show' trigger on left-click)
+        menu = (item('Show', self.show_window, default=True), item('Quit', self.quit_app))
         
         # Create Icon
         self.tray_icon = pystray.Icon("name", image, "Launcher Pro", menu)
