@@ -77,6 +77,7 @@ class App(ctk.CTk):
 
         # State
         self.view_mode = "List" # "List" or "Grid"
+        self.icon_size_var = ctk.IntVar(value=32)
 
         # Window Setup
         self.title("Multiple App Launcher - Admin")
@@ -148,7 +149,28 @@ class App(ctk.CTk):
             variable=self.startup_state_var,
             command=lambda _v: self.save_settings(),
         )
-        self.startup_state_menu.grid(row=10, column=0, padx=20, pady=(5, 20), sticky="s")
+        self.startup_state_menu.grid(row=10, column=0, padx=20, pady=(5, 10), sticky="s")
+
+        # 4. Icon Size Setting
+        self.lbl_icon_size_setting = ctk.CTkLabel(self.sidebar_frame, text="Icon Size:", anchor="w")
+        self.lbl_icon_size_setting.grid(row=11, column=0, padx=20, pady=(10, 0), sticky="s")
+
+        self.icon_size_control_frame = ctk.CTkFrame(self.sidebar_frame, fg_color="transparent")
+        self.icon_size_control_frame.grid(row=12, column=0, padx=20, pady=(5, 20), sticky="s")
+
+        self.icon_size_slider = ctk.CTkSlider(
+            self.icon_size_control_frame, from_=16, to=128, number_of_steps=112,
+            variable=self.icon_size_var, command=self.on_icon_size_changed,
+            width=120,
+        )
+        self.icon_size_slider.pack(side="left", padx=(0, 6))
+
+        self.icon_size_num_label = ctk.CTkLabel(
+            self.icon_size_control_frame, text=str(self.icon_size_var.get()),
+            width=36, cursor="hand2",
+        )
+        self.icon_size_num_label.pack(side="left")
+        self.icon_size_num_label.bind("<Button-1>", self.edit_icon_size)
 
 
         # --- MAIN CONTENT AREA ---
@@ -243,6 +265,11 @@ class App(ctk.CTk):
                     settings = json.load(f)
                 self.tray_switch_var.set(settings.get("close_to_tray", True))
                 self.startup_state_var.set(settings.get("startup_state", "Normal"))
+                icon_size = int(settings.get("icon_size", 32))
+                icon_size = max(16, min(128, icon_size))
+                self.icon_size_var.set(icon_size)
+                self.icon_size_slider.set(icon_size)
+                self.icon_size_num_label.configure(text=str(icon_size))
             except Exception as e:
                 print(f"Warning: Could not load settings: {e}")
 
@@ -251,6 +278,7 @@ class App(ctk.CTk):
         settings = {
             "close_to_tray": self.tray_switch_var.get(),
             "startup_state": self.startup_state_var.get(),
+            "icon_size": self.icon_size_var.get(),
         }
         try:
             with open(SETTINGS_FILE, "w") as f:
@@ -269,6 +297,47 @@ class App(ctk.CTk):
             self.withdraw()
             threading.Thread(target=self.show_tray_icon, daemon=True).start()
         # "Normal" — default window state, no action needed
+
+    def on_icon_size_changed(self, value):
+        """Called when the icon size slider moves."""
+        size = int(value)
+        self.icon_size_var.set(size)
+        self.icon_size_num_label.configure(text=str(size))
+        self.save_settings()
+        self.refresh_profile_ui()
+
+    def edit_icon_size(self, event=None):
+        """Replace the number label with an editable entry field."""
+        self.icon_size_num_label.pack_forget()
+
+        entry_var = ctk.StringVar(value=str(self.icon_size_var.get()))
+        entry = ctk.CTkEntry(self.icon_size_control_frame, textvariable=entry_var, width=45)
+        entry.pack(side="left")
+        entry.focus_set()
+        entry.select_range(0, "end")
+
+        committed = False
+
+        def commit(event=None):
+            nonlocal committed
+            if committed:
+                return
+            committed = True
+            try:
+                size = int(entry_var.get())
+                size = max(16, min(128, size))
+            except ValueError:
+                size = self.icon_size_var.get()
+            entry.destroy()
+            self.icon_size_num_label.configure(text=str(size))
+            self.icon_size_num_label.pack(side="left")
+            self.icon_size_var.set(size)
+            self.icon_size_slider.set(size)
+            self.save_settings()
+            self.refresh_profile_ui()
+
+        entry.bind("<Return>", commit)
+        entry.bind("<FocusOut>", commit)
 
     # --- DATA & UI LOGIC (Existing Code) ---
 
@@ -307,6 +376,8 @@ class App(ctk.CTk):
         self.app_rows = []
         self.icon_images = [] # Prevent GC
 
+        icon_size = self.icon_size_var.get()
+
         if self.view_mode == "List":
             # Reset Grid Config if coming from Grid mode
             self.scroll_frame.grid_columnconfigure(0, weight=1)
@@ -333,12 +404,12 @@ class App(ctk.CTk):
                 btn_run.pack(side="right", padx=(5, 0))
 
                 # --- Content Layout ---
-                icon_img = self.get_exe_icon(app_path)
+                icon_img = self.get_exe_icon(app_path, pixel_size=icon_size)
                 if icon_img:
                     self.icon_images.append(icon_img)
 
                 # 1. Icon Label
-                lbl_icon = ctk.CTkLabel(row_frame, text="", image=icon_img, width=40)
+                lbl_icon = ctk.CTkLabel(row_frame, text="", image=icon_img, width=icon_size + 20)
                 lbl_icon.pack(side="left", padx=(10, 5))
 
                 # 2. Information Frame (Name + Path)
@@ -403,13 +474,13 @@ class App(ctk.CTk):
                 row = index // cols
                 col = index % cols
                 
-                # Use larger icon if possible
-                icon_img = self.get_exe_icon(app_path, size="large")
+                icon_img = self.get_exe_icon(app_path, pixel_size=icon_size)
                 if icon_img:
                     self.icon_images.append(icon_img)
                 
                 # App Button/Card
-                btn = ctk.CTkButton(self.scroll_frame, text="", image=icon_img, width=80, height=80,
+                btn_size = icon_size + 20
+                btn = ctk.CTkButton(self.scroll_frame, text="", image=icon_img, width=btn_size, height=btn_size,
                                     fg_color="transparent", border_width=2, border_color="gray30", hover_color="gray25",
                                     command=lambda p=app_path: self.launch_single_app(p))
                 btn.grid(row=row, column=col, padx=10, pady=10)
@@ -428,40 +499,47 @@ class App(ctk.CTk):
                 
                 btn.bind("<Button-3>", show_menu)
 
-    def get_exe_icon(self, path, size="small"):
+    def get_exe_icon(self, path, pixel_size=None, size=None):
+        """Return a CTkImage for the executable at *path* scaled to *pixel_size*×*pixel_size*.
+
+        The legacy *size* keyword ("small" / "large") is still accepted for
+        backwards-compatibility but is ignored when *pixel_size* is given.
+        """
+        if pixel_size is None:
+            # Fall back to legacy size parameter for any remaining callers
+            if size == "large":
+                pixel_size = 70
+            else:
+                pixel_size = self.icon_size_var.get()
+
         if not path or not os.path.exists(path):
             return None
         
         path = os.path.normpath(path)
-        
-        # Method 1: PrivateExtractIconsW (ctypes) - Most reliable for specific sizes
-        if size == "large":
-            try:
-                # Try 256x256
-                hIcon_256 = self.fetch_icon_ctypes(path, 256)
-                if hIcon_256:
-                    img = self.hicon_to_image(hIcon_256, 256, (70, 70))
-                    if img: return img
+        out_size = (pixel_size, pixel_size)
 
-                # Try 48x48
-                hIcon_48 = self.fetch_icon_ctypes(path, 48)
-                if hIcon_48:
-                    return self.hicon_to_image(hIcon_48, 48, (70, 70))
-            except Exception as e:
-                print(f"Ctypes Icon Fetch Error: {e}")
+        # Method 1: PrivateExtractIconsW (ctypes) — try the best available source size
+        try:
+            for req in [256, 48, 32]:
+                if req >= pixel_size:
+                    hIcon = self.fetch_icon_ctypes(path, req)
+                    if hIcon:
+                        img = self.hicon_to_image(hIcon, req, out_size)
+                        if img:
+                            return img
+        except Exception as e:
+            print(f"Ctypes Icon Fetch Error: {e}")
 
-        # Fallback / Normal method using ExtractIconEx (Standard 32x32)
+        # Fallback: ExtractIconEx (Standard 32×32 / 16×16)
         try:
             large, small = win32gui.ExtractIconEx(path, 0)
             
-            if size == "large":
-                 hIcon = large[0] if large else (small[0] if small else None)
-                 req_size = 32
-                 out_size = (70, 70)
+            if pixel_size >= 24:
+                hIcon = large[0] if large else (small[0] if small else None)
+                req_size = 32
             else:
-                 hIcon = small[0] if small else (large[0] if large else None)
-                 req_size = 16 
-                 out_size = (20, 20)
+                hIcon = small[0] if small else (large[0] if large else None)
+                req_size = 16
             
             if not hIcon:
                 return None
