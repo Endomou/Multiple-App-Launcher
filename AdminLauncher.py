@@ -7,6 +7,7 @@ import subprocess
 import os
 import json
 import winreg
+import threading
 from PIL import Image
 import pystray
 from pystray import MenuItem as item
@@ -22,6 +23,7 @@ ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
 
 DATA_FILE = "launcher_profiles.json"
+SETTINGS_FILE = "launcher_settings.json"
 APP_NAME = "MyModernLauncher"
 
 class ToolTip(object):
@@ -131,8 +133,22 @@ class App(ctk.CTk):
         # 2. Minimize to Tray Switch
         self.tray_switch_var = ctk.BooleanVar(value=True) # Default to True
         self.tray_switch = ctk.CTkSwitch(self.sidebar_frame, text="Close to Tray", 
+                                         command=self.save_settings,
                                          variable=self.tray_switch_var, onvalue=True, offvalue=False)
-        self.tray_switch.grid(row=8, column=0, padx=20, pady=20, sticky="s")
+        self.tray_switch.grid(row=8, column=0, padx=20, pady=(10, 0), sticky="s")
+
+        # 3. Start As option
+        self.lbl_start_as = ctk.CTkLabel(self.sidebar_frame, text="Start as:", anchor="w")
+        self.lbl_start_as.grid(row=9, column=0, padx=20, pady=(10, 0), sticky="s")
+
+        self.startup_state_var = ctk.StringVar(value="Normal")
+        self.startup_state_menu = ctk.CTkOptionMenu(
+            self.sidebar_frame,
+            values=["Normal", "Minimized", "Maximized", "Tray"],
+            variable=self.startup_state_var,
+            command=lambda _v: self.save_settings(),
+        )
+        self.startup_state_menu.grid(row=10, column=0, padx=20, pady=(5, 20), sticky="s")
 
 
         # --- MAIN CONTENT AREA ---
@@ -177,7 +193,9 @@ class App(ctk.CTk):
 
         # Initialization
         self.check_startup_status()
+        self.load_settings()
         self.refresh_profile_ui()
+        self.after(100, self.apply_startup_state)
 
     # --- TRAY ICON LOGIC ---
 
@@ -214,6 +232,43 @@ class App(ctk.CTk):
         self.tray_icon.stop()
         self.quit()
         sys.exit()
+
+    # --- SETTINGS LOGIC ---
+
+    def load_settings(self):
+        """Load persisted settings (tray preference, startup state)."""
+        if os.path.exists(SETTINGS_FILE):
+            try:
+                with open(SETTINGS_FILE, "r") as f:
+                    settings = json.load(f)
+                self.tray_switch_var.set(settings.get("close_to_tray", True))
+                self.startup_state_var.set(settings.get("startup_state", "Normal"))
+            except Exception as e:
+                print(f"Warning: Could not load settings: {e}")
+
+    def save_settings(self, *args):
+        """Persist current settings to disk."""
+        settings = {
+            "close_to_tray": self.tray_switch_var.get(),
+            "startup_state": self.startup_state_var.get(),
+        }
+        try:
+            with open(SETTINGS_FILE, "w") as f:
+                json.dump(settings, f, indent=4)
+        except Exception as e:
+            print(f"Warning: Could not save settings: {e}")
+
+    def apply_startup_state(self):
+        """Apply the chosen window state when the app first starts."""
+        state = self.startup_state_var.get()
+        if state == "Minimized":
+            self.iconify()
+        elif state == "Maximized":
+            self.state("zoomed")
+        elif state == "Tray":
+            self.withdraw()
+            threading.Thread(target=self.show_tray_icon, daemon=True).start()
+        # "Normal" — default window state, no action needed
 
     # --- DATA & UI LOGIC (Existing Code) ---
 
