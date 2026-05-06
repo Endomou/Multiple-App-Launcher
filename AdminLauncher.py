@@ -560,39 +560,57 @@ class App(ctk.CTk):
     # --- STARTUP LOGIC ---
     def toggle_startup(self):
         is_on = self.startup_switch_var.get()
-        key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
+        task_name = f"{APP_NAME}_Startup"
+
         if getattr(sys, 'frozen', False):
-            app_path = sys.executable 
+            exe_path = sys.executable 
+            work_dir = os.path.dirname(exe_path)
+            args_str = ""
         else:
             # Use pythonw.exe if available to avoid console window on startup
-            exe = sys.executable
-            if exe.lower().endswith("python.exe"):
-                dir_name = os.path.dirname(exe)
+            exe_path = sys.executable
+            if exe_path.lower().endswith("python.exe"):
+                dir_name = os.path.dirname(exe_path)
                 pythonw_path = os.path.join(dir_name, "pythonw.exe")
                 if os.path.exists(pythonw_path):
-                    exe = pythonw_path
-            app_path = f'"{exe}" "{os.path.abspath(sys.argv[0])}"'
+                    exe_path = pythonw_path
+            script_path = os.path.abspath(sys.argv[0])
+            work_dir = os.path.dirname(script_path)
+            safe_script_path = script_path.replace("'", "''")
+            args_str = f"-Argument ([char]34 + '{safe_script_path}' + [char]34)"
 
-        try:
-            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_ALL_ACCESS)
-            if is_on:
-                winreg.SetValueEx(key, APP_NAME, 0, winreg.REG_SZ, app_path)
-            else:
-                try:
-                    winreg.DeleteValue(key, APP_NAME)
-                except:
-                    pass
-            winreg.CloseKey(key)
-        except Exception as e:
-            messagebox.showerror("Registry Error", str(e))
+        safe_exe_path = exe_path.replace("'", "''")
+        safe_work_dir = work_dir.replace("'", "''")
+
+        if is_on:
+            ps_cmd = (
+                f"$ErrorActionPreference = 'Stop'; "
+                f"$Action = New-ScheduledTaskAction -Execute '{safe_exe_path}' -WorkingDirectory '{safe_work_dir}' {args_str}; "
+                f"$Trigger1 = New-ScheduledTaskTrigger -AtStartup; "
+                f"$Trigger2 = New-ScheduledTaskTrigger -AtLogOn; "
+                f"$Principal = New-ScheduledTaskPrincipal -GroupId 'BUILTIN\\Users' -RunLevel Highest; "
+                f"$Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit 0; "
+                f"Register-ScheduledTask -TaskName '{task_name}' -Action $Action -Trigger @($Trigger1, $Trigger2) -Principal $Principal -Settings $Settings -Force"
+            )
+            try:
+                subprocess.run(["powershell", "-WindowStyle", "Hidden", "-Command", ps_cmd], check=True, creationflags=subprocess.CREATE_NO_WINDOW, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
+            except Exception as e:
+                messagebox.showerror("Task Scheduler Error", f"Failed to enable startup:\n{e}")
+                self.startup_switch.deselect()
+        else:
+            try:
+                subprocess.run(["schtasks", "/delete", "/tn", task_name, "/f"], check=True, creationflags=subprocess.CREATE_NO_WINDOW, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
+            except Exception:
+                pass
 
     def check_startup_status(self):
-        key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
+        task_name = f"{APP_NAME}_Startup"
         try:
-            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_READ)
-            winreg.QueryValueEx(key, APP_NAME)
-            self.startup_switch.select()
-            winreg.CloseKey(key)
+            result = subprocess.run(["schtasks", "/query", "/tn", task_name], capture_output=True, text=True, creationflags=subprocess.CREATE_NO_WINDOW)
+            if result.returncode == 0:
+                self.startup_switch.select()
+            else:
+                self.startup_switch.deselect()
         except:
             self.startup_switch.deselect()
 
@@ -607,4 +625,14 @@ if __name__ == "__main__":
         app = App()
         app.mainloop()
     else:
-        ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, " ".join(sys.argv), None, 1)
+        if getattr(sys, 'frozen', False):
+            # If frozen, sys.executable is the compiled .exe
+            # Do not pass the script name as a parameter
+            params = " ".join([f'"{arg}"' for arg in sys.argv[1:]])
+            ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, params, None, 1)
+        else:
+            # If not frozen, sys.executable is python.exe
+            # We need to pass the script path and any other arguments
+            params = " ".join([f'"{arg}"' for arg in sys.argv])
+            ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, params, None, 1)
+        sys.exit()
