@@ -606,9 +606,37 @@ class App(ctk.CTk):
     def check_startup_status(self):
         task_name = f"{APP_NAME}_Startup"
         try:
-            result = subprocess.run(["schtasks", "/query", "/tn", task_name], capture_output=True, text=True, creationflags=subprocess.CREATE_NO_WINDOW)
-            if result.returncode == 0:
-                self.startup_switch.select()
+            ps_cmd = f"$t = Get-ScheduledTask -TaskName '{task_name}' -ErrorAction SilentlyContinue; if ($t) {{ Write-Output $t.Actions[0].Execute; Write-Output ('ARGS:' + $t.Actions[0].Arguments) }}"
+            result = subprocess.run(["powershell", "-NoProfile", "-WindowStyle", "Hidden", "-Command", ps_cmd], capture_output=True, text=True, creationflags=subprocess.CREATE_NO_WINDOW)
+            
+            output = result.stdout.strip()
+            if result.returncode == 0 and output:
+                lines = [line.strip() for line in output.splitlines()]
+                task_exe_path = lines[0].strip('"\'') if len(lines) > 0 else ""
+                task_args = lines[1][5:] if len(lines) > 1 and lines[1].startswith("ARGS:") else ""
+                
+                if getattr(sys, 'frozen', False):
+                    expected_exe = sys.executable
+                    expected_args = ""
+                else:
+                    expected_exe = sys.executable
+                    if expected_exe.lower().endswith("python.exe"):
+                        dir_name = os.path.dirname(expected_exe)
+                        pythonw_path = os.path.join(dir_name, "pythonw.exe")
+                        if os.path.exists(pythonw_path):
+                            expected_exe = pythonw_path
+                    script_path = os.path.abspath(sys.argv[0])
+                    expected_args = f'"{script_path}"'
+                
+                path_match = (task_exe_path.lower() == expected_exe.lower())
+                args_match = (task_args.lower() == expected_args.lower())
+                
+                if path_match and args_match:
+                    self.startup_switch.select()
+                else:
+                    self.startup_switch_var.set(True)
+                    self.toggle_startup()
+                    self.startup_switch.select()
             else:
                 self.startup_switch.deselect()
         except:
