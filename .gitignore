@@ -16,3 +16,4 @@ adminLauncher.spec
 dist/launcher_profiles.json
 /dist
 launcher_profiles.json
+__pycache__/
