@@ -53,6 +53,12 @@ Run at Startup: Toggles a registry key to start the app when you log in.
 
 Close to Tray: If enabled, clicking the X button minimizes the app to the system tray (near the clock) instead of closing it.
 
+Start as: Controls the initial window state when the app launches. Options are:
+- **Normal** (default): Opens as a regular window.
+- **Minimized**: Starts minimized to the taskbar.
+- **Maximized**: Starts maximized to fill the screen.
+- **Tray**: Starts hidden directly in the system tray — no window appears until you click the tray icon.
+
 ⚠️ Troubleshooting
 Antivirus Warnings: Windows Defender may flag the compiled .exe because it requests Admin rights and is unsigned. This is a known "False Positive" for PyInstaller apps. You can add an exclusion to resolve this.
 
