@@ -1,7 +1,10 @@
-Multiple-App Launcher
+# Multiple-App Launcher
+
 <img width="902" height="632" alt="image" src="https://github.com/user-attachments/assets/cab9e66e-59e3-463f-9342-fa0a128c6369" />
 
 A Python-based application dashboard that allows you to launch multiple applications simultaneously with Administrator privileges while bypassing repetitive UAC prompts.
+
+This app was built due to the annoyance of multiple uac prompt when launching apps as admin in windows its other purpose is also to launch multiple apps at the same time while avoiding multiple uac prompt.
 
 🚀 Features
 Bypass UAC Prompts: Launch the dashboard once as Admin, and all subsequent apps launch silently with full privileges.
