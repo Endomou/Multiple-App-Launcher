@@ -1,5 +1,5 @@
-Modern Admin Launcher
-A modern, Python-based application dashboard that allows you to launch multiple applications simultaneously with Administrator privileges while bypassing repetitive UAC prompts.
+Multiple-App Launcher
+A Python-based application dashboard that allows you to launch multiple applications simultaneously with Administrator privileges while bypassing repetitive UAC prompts.
 
 🚀 Features
 Bypass UAC Prompts: Launch the dashboard once as Admin, and all subsequent apps launch silently with full privileges.
