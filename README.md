@@ -1,4 +1,6 @@
 Multiple-App Launcher
+<img width="902" height="632" alt="image" src="https://github.com/user-attachments/assets/cab9e66e-59e3-463f-9342-fa0a128c6369" />
+
 A Python-based application dashboard that allows you to launch multiple applications simultaneously with Administrator privileges while bypassing repetitive UAC prompts.
 
 🚀 Features
@@ -62,4 +64,4 @@ Start as: Controls the initial window state when the app launches. Options are:
 ⚠️ Troubleshooting
 Antivirus Warnings: Windows Defender may flag the compiled .exe because it requests Admin rights and is unsigned. This is a known "False Positive" for PyInstaller apps. You can add an exclusion to resolve this.
 
-Startup Prompt: When running on startup, Windows will still show one UAC prompt for the launcher itself. This is a mandatory security feature of Windows for any Admin-level startup app.
+Windows will still show one UAC prompt for the launcher itself when launching normally. Running on Startup no longer needs UAC prompt since it uses task scheduler to launch as admin already.
