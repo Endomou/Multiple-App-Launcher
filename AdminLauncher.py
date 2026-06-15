@@ -26,6 +26,8 @@ DATA_FILE = "launcher_profiles.json"
 SETTINGS_FILE = "launcher_settings.json"
 APP_NAME = "MyModernLauncher"
 
+
+
 class ToolTip(object):
     def __init__(self, widget, text):
         self.widget = widget
@@ -782,10 +784,17 @@ def is_admin():
         return False
 
 if __name__ == "__main__":
+    mutex_name = "MultipleAppLauncher_AdminLauncher_Mutex"
+    mutex = ctypes.windll.kernel32.CreateMutexW(None, False, mutex_name)
+    if ctypes.windll.kernel32.GetLastError() == 183: # ERROR_ALREADY_EXISTS
+        ctypes.windll.user32.MessageBoxW(0, "Multiple App Launcher is already open.", "Already Running", 0x30)
+        sys.exit(0)
+
     if is_admin():
         app = App()
         app.mainloop()
     else:
+        ctypes.windll.kernel32.CloseHandle(mutex)
         if getattr(sys, 'frozen', False):
             # If frozen, sys.executable is the compiled .exe
             # Do not pass the script name as a parameter
