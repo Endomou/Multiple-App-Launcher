@@ -305,8 +305,8 @@ class App(ctk.CTk):
         # Create Icon
         self.tray_icon = pystray.Icon("name", image, "Launcher Pro", menu)
         
-        # Run it (This blocks the main thread until icon.stop is called)
-        self.tray_icon.run()
+        # Run it in a separate thread to avoid blocking Tkinter mainloop
+        threading.Thread(target=self.tray_icon.run, daemon=True).start()
 
     def show_window(self, icon, item):
         """Callback to restore window"""
@@ -316,8 +316,13 @@ class App(ctk.CTk):
     def quit_app(self, icon, item):
         """Callback to fully quit"""
         self.tray_icon.stop()
-        self.quit()
-        sys.exit()
+        
+        def safe_quit():
+            self.quit()
+            self.destroy()
+            sys.exit()
+            
+        self.after(0, safe_quit)
 
     # --- SETTINGS LOGIC ---
 
