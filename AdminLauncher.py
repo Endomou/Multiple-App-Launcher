@@ -73,6 +73,68 @@ class ToolTip(object):
         if tw:
             tw.destroy()
 
+class AppConfigDialog(ctk.CTkToplevel):
+    def __init__(self, master, title="App Configuration", initial_path="", initial_args=""):
+        super().__init__(master)
+        self.title(title)
+        self.geometry("600x250")
+        self.attributes('-topmost', True)
+        
+        self.result = None
+        
+        self.grid_columnconfigure(1, weight=1)
+        self.grid_rowconfigure(3, weight=1)
+        
+        # Path
+        ctk.CTkLabel(self, text="Path:").grid(row=0, column=0, padx=10, pady=(20, 10), sticky="e")
+        self.path_entry = ctk.CTkEntry(self)
+        self.path_entry.insert(0, initial_path)
+        self.path_entry.grid(row=0, column=1, padx=10, pady=(20, 10), sticky="ew")
+        
+        self.btn_browse = ctk.CTkButton(self, text="Browse...", width=80, command=self.browse)
+        self.btn_browse.grid(row=0, column=2, padx=10, pady=(20, 10))
+        
+        # Args
+        ctk.CTkLabel(self, text="Arguments:").grid(row=1, column=0, padx=10, pady=10, sticky="e")
+        self.args_entry = ctk.CTkEntry(self)
+        self.args_entry.insert(0, initial_args)
+        self.args_entry.grid(row=1, column=1, columnspan=2, padx=10, pady=10, sticky="ew")
+        
+        # Buttons
+        btn_frame = ctk.CTkFrame(self, fg_color="transparent")
+        btn_frame.grid(row=2, column=0, columnspan=3, pady=(20, 10))
+        
+        self.btn_save = ctk.CTkButton(btn_frame, text="Save", command=self.save)
+        self.btn_save.pack(side="left", padx=10)
+        
+        self.btn_cancel = ctk.CTkButton(btn_frame, text="Cancel", fg_color="gray", command=self.cancel)
+        self.btn_cancel.pack(side="left", padx=10)
+        
+        self.focus()
+        self.grab_set()
+
+    def browse(self):
+        file_path = filedialog.askopenfilename(filetypes=[("Executables", "*.exe")], initialfile=self.path_entry.get())
+        if file_path:
+            self.path_entry.delete(0, 'end')
+            self.path_entry.insert(0, file_path)
+
+    def save(self):
+        path = self.path_entry.get().strip()
+        if not path:
+            messagebox.showerror("Error", "Path cannot be empty.", parent=self)
+            return
+        args = self.args_entry.get().strip()
+        self.result = {"path": path, "args": args}
+        self.destroy()
+
+    def cancel(self):
+        self.destroy()
+
+    def get_result(self):
+        self.master.wait_window(self)
+        return self.result
+
 class App(ctk.CTk):
     def __init__(self):
         super().__init__()
@@ -347,7 +409,15 @@ class App(ctk.CTk):
         if os.path.exists(DATA_FILE):
             try:
                 with open(DATA_FILE, "r") as f:
-                    self.profiles = json.load(f)
+                    loaded_profiles = json.load(f)
+                self.profiles = {}
+                for p_name, p_apps in loaded_profiles.items():
+                    self.profiles[p_name] = []
+                    for app in p_apps:
+                        if isinstance(app, str):
+                            self.profiles[p_name].append({"path": app, "args": ""})
+                        else:
+                            self.profiles[p_name].append(app)
             except:
                 self.profiles = {"Default": []}
         else:
@@ -386,7 +456,14 @@ class App(ctk.CTk):
             for i in range(1, 10): # clear other column weights
                 self.scroll_frame.grid_columnconfigure(i, weight=0)
 
-            for index, app_path in enumerate(apps):
+            for index, app_data in enumerate(apps):
+                if isinstance(app_data, str):
+                    app_path = app_data
+                    app_args = ""
+                else:
+                    app_path = app_data.get("path", "")
+                    app_args = app_data.get("args", "")
+
                 row_frame = ctk.CTkFrame(self.scroll_frame)
                 row_frame.pack(fill="x", pady=5)
                 self.app_rows.append(row_frame)
@@ -394,7 +471,7 @@ class App(ctk.CTk):
 
                 # Buttons (Packed FIRST to reserve space)
                 btn_del = ctk.CTkButton(row_frame, text="✕", width=40, fg_color="#ef5350", hover_color="#c62828",
-                                        command=lambda x=app_path: self.remove_app(x))
+                                        command=lambda x=index: self.remove_app(x))
                 btn_del.pack(side="right", padx=(5, 10))
 
                 btn_edit = ctk.CTkButton(row_frame, text="✎", width=40, fg_color="#444", hover_color="#666",
@@ -402,7 +479,7 @@ class App(ctk.CTk):
                 btn_edit.pack(side="right", padx=(5, 0))
 
                 btn_run = ctk.CTkButton(row_frame, text="▶", width=40, fg_color="#2CC985", hover_color="#0C955A",
-                                        command=lambda p=app_path: self.launch_single_app(p))
+                                        command=lambda p=app_path, a=app_args: self.launch_single_app(p, a))
                 btn_run.pack(side="right", padx=(5, 0))
 
                 # --- Content Layout ---
@@ -422,14 +499,14 @@ class App(ctk.CTk):
                 lbl_name = ctk.CTkLabel(info_frame, text=app_name, anchor="w", font=ctk.CTkFont(size=14, weight="bold"))
                 lbl_name.pack(side="top", fill="x")
 
-                lbl_path = ctk.CTkLabel(info_frame, text=app_path, anchor="w", font=ctk.CTkFont(size=12), text_color="gray70")
+                lbl_path = ctk.CTkLabel(info_frame, text=f"{app_path} {app_args}".strip(), anchor="w", font=ctk.CTkFont(size=12), text_color="gray70")
                 lbl_path.pack(side="top", fill="x")
 
                 # Context Menu
                 menu = Menu(self, tearoff=0)
-                menu.add_command(label="Launch", command=lambda p=app_path: self.launch_single_app(p))
+                menu.add_command(label="Launch", command=lambda p=app_path, a=app_args: self.launch_single_app(p, a))
                 menu.add_command(label="Edit", command=lambda x=index: self.edit_app(x))
-                menu.add_command(label="Delete", command=lambda x=app_path: self.remove_app(x))
+                menu.add_command(label="Delete", command=lambda x=index: self.remove_app(x))
 
                 def show_menu(event, m=menu):
                      m.tk_popup(event.x_root, event.y_root)
@@ -461,7 +538,7 @@ class App(ctk.CTk):
                 # Bind Events to ALL structural elements so clicking anywhere works
                 for w in [row_frame, lbl_icon, info_frame, lbl_name, lbl_path]:
                     w.bind("<Button-1>", lambda event, f=row_frame: self.select_app_row(f))
-                    w.bind("<Double-Button-1>", lambda event, p=app_path: self.launch_single_app(p))
+                    w.bind("<Double-Button-1>", lambda event, p=app_path, a=app_args: self.launch_single_app(p, a))
                     w.bind("<Button-3>", show_menu)
                     w.bind("<Enter>", on_enter)
                     w.bind("<Leave>", on_leave)
@@ -472,9 +549,15 @@ class App(ctk.CTk):
             for i in range(cols):
                 self.scroll_frame.grid_columnconfigure(i, weight=1)
 
-            for index, app_path in enumerate(apps):
+            for index, app_data in enumerate(apps):
                 row = index // cols
                 col = index % cols
+                if isinstance(app_data, str):
+                    app_path = app_data
+                    app_args = ""
+                else:
+                    app_path = app_data.get("path", "")
+                    app_args = app_data.get("args", "")
                 
                 icon_img = self.get_exe_icon(app_path, pixel_size=icon_size)
                 if icon_img:
@@ -484,17 +567,17 @@ class App(ctk.CTk):
                 btn_size = icon_size + 20
                 btn = ctk.CTkButton(self.scroll_frame, text="", image=icon_img, width=btn_size, height=btn_size,
                                     fg_color="transparent", border_width=2, border_color="gray30", hover_color="gray25",
-                                    command=lambda p=app_path: self.launch_single_app(p))
+                                    command=lambda p=app_path, a=app_args: self.launch_single_app(p, a))
                 btn.grid(row=row, column=col, padx=10, pady=10)
                 
                 # Tooltip for Title
-                ToolTip(btn, text=os.path.basename(app_path))
+                ToolTip(btn, text=f"{os.path.basename(app_path)} {app_args}".strip())
                 
                 # Context Menu for Grid Item
                 menu = Menu(self, tearoff=0)
-                menu.add_command(label="Launch", command=lambda p=app_path: self.launch_single_app(p))
+                menu.add_command(label="Launch", command=lambda p=app_path, a=app_args: self.launch_single_app(p, a))
                 menu.add_command(label="Edit", command=lambda x=index: self.edit_app(x))
-                menu.add_command(label="Delete", command=lambda x=app_path: self.remove_app(x))
+                menu.add_command(label="Delete", command=lambda x=index: self.remove_app(x))
                 
                 def show_menu(event, m=menu):
                     m.tk_popup(event.x_root, event.y_root)
@@ -600,9 +683,12 @@ class App(ctk.CTk):
                 frame.configure(fg_color=("gray86", "gray17"))
                 frame.is_selected = False
 
-    def launch_single_app(self, app_path):
+    def launch_single_app(self, app_path, app_args=""):
         try:
-            subprocess.Popen(app_path)
+            if app_args:
+                subprocess.Popen(f'"{app_path}" {app_args}', shell=False)
+            else:
+                subprocess.Popen([app_path])
         except Exception as e:
             print(f"Error launching {app_path}: {e}")
 
@@ -644,25 +730,37 @@ class App(ctk.CTk):
             self.refresh_profile_ui()
 
     def edit_app(self, index):
-        old_path = self.profiles[self.current_profile_name][index]
-        new_path = filedialog.askopenfilename(filetypes=[("Executables", "*.exe")], initialfile=old_path)
-        if new_path:
-            self.profiles[self.current_profile_name][index] = new_path
+        old_app = self.profiles[self.current_profile_name][index]
+        if isinstance(old_app, str):
+            old_path = old_app
+            old_args = ""
+        else:
+            old_path = old_app.get("path", "")
+            old_args = old_app.get("args", "")
+            
+        dialog = AppConfigDialog(self, title="Edit Application", initial_path=old_path, initial_args=old_args)
+        result = dialog.get_result()
+        
+        if result:
+            self.profiles[self.current_profile_name][index] = result
             self.save_data()
             self.refresh_profile_ui()
 
     def add_app(self):
-        path = filedialog.askopenfilename(filetypes=[("Executables", "*.exe")])
-        if path:
-            if path not in self.profiles[self.current_profile_name]:
-                self.profiles[self.current_profile_name].append(path)
+        dialog = AppConfigDialog(self, title="Add Application")
+        result = dialog.get_result()
+        
+        if result:
+            if result not in self.profiles[self.current_profile_name]:
+                self.profiles[self.current_profile_name].append(result)
                 self.save_data()
                 self.refresh_profile_ui()
 
-    def remove_app(self, path_to_remove):
-        self.profiles[self.current_profile_name].remove(path_to_remove)
-        self.save_data()
-        self.refresh_profile_ui()
+    def remove_app(self, index):
+        if 0 <= index < len(self.profiles[self.current_profile_name]):
+            del self.profiles[self.current_profile_name][index]
+            self.save_data()
+            self.refresh_profile_ui()
 
     def launch_profile(self):
         self.launch_specific_profile(self.current_profile_name)
@@ -674,9 +772,18 @@ class App(ctk.CTk):
             return
         
         count = 0
-        for path in apps:
+        for app_data in apps:
+            if isinstance(app_data, str):
+                path = app_data
+                args = ""
+            else:
+                path = app_data.get("path", "")
+                args = app_data.get("args", "")
             try:
-                subprocess.Popen(path)
+                if args:
+                    subprocess.Popen(f'"{path}" {args}', shell=False)
+                else:
+                    subprocess.Popen([path])
                 count += 1
             except Exception as e:
                 print(f"Error: {e}")

@@ -17,3 +17,4 @@ dist/launcher_profiles.json
 /dist
 launcher_profiles.json
 __pycache__/
+launcher_settings.json
